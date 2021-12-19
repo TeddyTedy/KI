@@ -10,8 +10,14 @@ class Labyrinth:
     Stores a specific configuration of the labyrinth
     """
 
+    CURRENT_MAX_ID: int = 1
+    """
+    - ensures that the id for each object is unique
+    - gets incremented every time during object creation in the constructor
+    """
+
     def __init__(self, labyrinth_tiles: List[List[LabyrinthTile]], free_tile: LabyrinthTile,
-                 player_position: Position2D, goal_position: Position2D, distance: int):
+                 player_position: Position2D, goal_position: Position2D, distance: int, previous_id: int):
         """
         Creates a Labyrinth object which stores the new_state of the labyrinth
 
@@ -21,8 +27,10 @@ class Labyrinth:
             player_position: two-dimensional position of the player inside the labyrinth
             goal_position: two-dimensional position of the goal tile inside the labyrinth
             distance: cost needed to reach current new_state
+            previous_id: id of the previous state of the labyrinth, 0 for initial value
 
         Instance variables
+            id: unique identifier of the labyrinth state
             goal_reached: boolean, whether the player has reached the goal destination
             combined_heuristic_cost: sum of distance and approximated distance to the goal
             max_row_index: maximum number which can be used to access a specific row of the 
@@ -35,6 +43,10 @@ class Labyrinth:
         self.player_position: Position2D = player_position
         self.goal_position: Position2D = goal_position
         self.distance: int = distance
+        self.previous_id: int = previous_id
+
+        self.id = Labyrinth.CURRENT_MAX_ID
+        Labyrinth.CURRENT_MAX_ID += 1
         self.goal_reached: bool = self.check_goal_reached()
         self.combined_heuristic_cost: float = self.calculate_combined_heuristic_cost()
         self.max_row_index = len(labyrinth_tiles) - 1
@@ -52,47 +64,51 @@ class Labyrinth:
         """
         - Approximates the heuristic which at least is the distance + 1 (at least one tile insert is needed)
         - also factors in the amount of tiles that have to be passed at a minimum
-        - passing a single tile has an aproximated cost of less than one, because only tile insertions increase cost 
-          and multiple tiles can be passed per insertion. (0.3 arbitary number)
+        - passing a single tile has an approximated cost of less than one, because only tile insertions increase cost
+          and multiple tiles can be passed per insertion. (0.3 arbitrary number)
         - also rewards being positioned on a tile which has access in the directions towards the goal
         
         Returns: approximated cost for the player to reach the goal destination
         """
-        approximated_cost = self.distance + 1 + (0.3 * abs(self.goal_position.column - self.player_position.column) + abs(
-            self.goal_position.row - self.player_position.row))
-        
+        approximated_cost = self.distance + 1 + (0.3 *
+                                                 abs(self.goal_position.column - self.player_position.column) +
+                                                 abs(self.goal_position.row - self.player_position.row))
+
         # Rewards great access of the player tile by decreasing cost
         best_tile: LabyrinthTile = LabyrinthTile(False, False, False, False)
         reward_each_side: float = 0.3
-        if(self.goal_position.row > self.player_position.row):
+        if self.goal_position.row > self.player_position.row:
             best_tile.bottom_accessible = True
             reward_each_side = reward_each_side * 0.5
-        elif(self.goal_position.row < self.player_position.row):
+        elif self.goal_position.row < self.player_position.row:
             best_tile.top_accessible = True
             reward_each_side = reward_each_side * 0.5
-        if(self.goal_position.column > self.player_position.column):
+        if self.goal_position.column > self.player_position.column:
             best_tile.right_accessible = True
             reward_each_side = reward_each_side * 0.5
-        elif(self.goal_position.column < self.player_position.column):
+        elif self.goal_position.column < self.player_position.column:
             best_tile.left_accessible = True
             reward_each_side = reward_each_side * 0.5
-        
-        currentTile: LabyrinthTile = self.get_labyrinth_tile(self.player_position)
-        if (best_tile.left_accessible and best_tile.left_accessible == currentTile.left_accessible):
+
+        current_tile: LabyrinthTile = self.get_labyrinth_tile(self.player_position)
+        if best_tile.left_accessible and best_tile.left_accessible == current_tile.left_accessible:
             approximated_cost -= reward_each_side
-        if (best_tile.top_accessible and best_tile.top_accessible == currentTile.top_accessible):
+        if best_tile.top_accessible and best_tile.top_accessible == current_tile.top_accessible:
             approximated_cost -= reward_each_side
-        if (best_tile.right_accessible and best_tile.right_accessible == currentTile.right_accessible):
-            approximated_cost -= reward_each_side        
-        if (best_tile.bottom_accessible and best_tile.bottom_accessible == currentTile.bottom_accessible):
-            approximated_cost -= reward_each_side    
+        if best_tile.right_accessible and best_tile.right_accessible == current_tile.right_accessible:
+            approximated_cost -= reward_each_side
+        if best_tile.bottom_accessible and best_tile.bottom_accessible == current_tile.bottom_accessible:
+            approximated_cost -= reward_each_side
 
         return approximated_cost
 
     def insert_free_tile(self, left_rows: List[int], right_rows: List[int]):
         """
-        Inserts the free/outside tile in all specified rows. The given parameter specify in which rows the free tile
-        can be inserted on the left and right side. Returns the resulting states
+        - Inserts the free/outside tile in all specified rows.
+        - The given parameter specify in which rows the free tile
+        can be inserted on the left and right side.
+        - moves the player position if is affected by the tile insert
+        - returns the resulting states.
 
         Args:
             left_rows: row indexes which allow a tile insertion on the left side
@@ -104,31 +120,34 @@ class Labyrinth:
 
         for left_row in left_rows:
             new_player_position: Position2D = copy.deepcopy(self.player_position)
-            if (new_player_position.row == left_row):
-                if (new_player_position.column == self.max_column_index):
+            if new_player_position.row == left_row:
+                if new_player_position.column == self.max_column_index:
                     new_player_position.column = 0
-                else: 
+                else:
                     new_player_position.column += 1
-            new_labyrinth_tiles: List[List[LabyrinthTile]] = self.get_labyrinth_tiles_deep_copy()
+            new_labyrinth_tiles: List[List[LabyrinthTile]] = copy.deepcopy(self.labyrinth_tiles)
             new_free_tile: LabyrinthTile = new_labyrinth_tiles[left_row].pop()
             new_labyrinth_tiles[left_row].insert(0, self.free_tile)
-            new_states.append(self.get_state_after_tile_insertion(new_labyrinth_tiles, new_free_tile, new_player_position))
+            new_states.append(self.get_state_after_tile_insertion(new_labyrinth_tiles, new_free_tile,
+                                                                  new_player_position, self.id))
 
         for right_row in right_rows:
             new_player_position: Position2D = copy.deepcopy(self.player_position)
-            if (new_player_position.row == right_row):
-                if (new_player_position.column == 0):
+            if new_player_position.row == right_row:
+                if new_player_position.column == 0:
                     new_player_position.column = self.max_column_index
-                else: 
+                else:
                     new_player_position.column += -1
-            new_labyrinth_tiles: List[List[LabyrinthTile]] = self.get_labyrinth_tiles_deep_copy()
+            new_labyrinth_tiles: List[List[LabyrinthTile]] = copy.deepcopy(self.labyrinth_tiles)
             new_free_tile: LabyrinthTile = new_labyrinth_tiles[right_row].pop(0)
             new_labyrinth_tiles[right_row].append(self.free_tile)
-            new_states.append(self.get_state_after_tile_insertion(new_labyrinth_tiles, new_free_tile, new_player_position))
+            new_states.append(self.get_state_after_tile_insertion(new_labyrinth_tiles, new_free_tile,
+                                                                  new_player_position, self.id))
 
         return new_states
 
-    def get_state_after_tile_insertion(self, labyrinth_tiles: List[List[LabyrinthTile]], free_tile: LabyrinthTile, new_player_position: Position2D):
+    def get_state_after_tile_insertion(self, labyrinth_tiles: List[List[LabyrinthTile]], free_tile: LabyrinthTile,
+                                       new_player_position: Position2D, previous_id: int):
         """
         Creates a new instance of the Labyrinth class after inserting the free tile into the labyrinth. The changed
         properties are given as parameters. Additionally, increases the distance by 1 (cost of the tile insertion)
@@ -136,10 +155,13 @@ class Labyrinth:
         Args:
             labyrinth_tiles: Array containing all tiles of the labyrinth
             free_tile: Free tile that can be inserted at specific positions of the labyrinth
+            new_player_position: position of the player after being pushed by inserted tile
+            previous_id: id of the previous state of the labyrinth
 
         Returns: new Labyrinth instance after tile insertion
         """
-        return Labyrinth(labyrinth_tiles, free_tile, new_player_position, self.goal_position, self.distance + 1)
+        return Labyrinth(labyrinth_tiles, free_tile, new_player_position, self.goal_position, self.distance + 1,
+                         previous_id)
 
     def move_player(self):
         """
@@ -191,7 +213,7 @@ class Labyrinth:
 
         for new_position in new_positions:
             new_states.append(Labyrinth(self.labyrinth_tiles, self.free_tile, new_position, self.goal_position,
-                                        self.distance))
+                                        self.distance, self.id))
 
         return new_states
 
@@ -206,10 +228,6 @@ class Labyrinth:
         """
         return self.labyrinth_tiles[position.row][position.column]
 
-    def get_labyrinth_tiles_deep_copy(self):
-        new_labyrinth = copy.deepcopy(self.labyrinth_tiles)
-        return new_labyrinth
-
     def __eq__(self, other):
         """
         checks if two Labyrinth are equivalent. Does not cheek for the distance and combined heuristic cost !!!
@@ -223,4 +241,6 @@ class Labyrinth:
             # don't attempt to compare against unrelated types
             return NotImplemented
 
-        return self.labyrinth_tiles == other.labyrinth_tiles and self.free_tile == other.free_tile and self.player_position == other.player_position and self.goal_position == other.goal_position and self.goal_reached == other.goal_reached
+        return self.labyrinth_tiles == other.labyrinth_tiles and self.free_tile == other.free_tile and \
+               self.player_position == other.player_position and self.goal_position == other.goal_position and \
+               self.goal_reached == other.goal_reached

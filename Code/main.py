@@ -1,5 +1,6 @@
 import createGame
+from AStar import AStar
 
-a_star = createGame.create_game('./input/puzzle.json')
-
-solved = a_star.solve()
+a_star: AStar = createGame.create_game('./input/puzzle.json')
+a_star.solve()
+a_star.print_result()
