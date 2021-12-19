@@ -25,4 +25,4 @@ As part of university project assignment of the artificial intelligence course o
 
 (Depens on OS, example below for Ubuntu 18.04)
 
-python3 Path_To_main.py/main.py Path_to_input_File/input.json 
+python3 Path_To_main.py/main.py Path_to_input_File/puzzle.json 
